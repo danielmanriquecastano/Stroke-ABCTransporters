@@ -1,0 +1,765 @@
+### 1. Call the Rotarod File
+
+RotaRod <- read.csv(choose.files(), header = TRUE)
+
+## 2. Computing to extract errors from the time
+
+#Separate columns from rotarod test
+indexes <- grep("^RR", colnames(RotaRod))
+#Save columns name as vector
+columns <- colnames(RotaRod[c(1,indexes)])
+
+#Get table with mice and rota columns
+mice_table <- RotaRod[c(1,indexes)]
+
+#Convert from list to dataframe and set column names
+mice_table <- data.frame(matrix(unlist(mice_table), nrow=74, byrow=F), stringsAsFactors = FALSE)
+names(mice_table) <- columns
+#To select the colummns needed. The data subset is ready to work with
+mice_table <- mice_table[1:74,]
+
+#Time prefixes to create partial and total labels
+time_prefixes <- c("0D", "7D", "14D", "21D", "28D", "35D", "42D")
+
+#to add the words ROTA y TOTAL to time prefixes and get the titles for the outcome
+
+total_labels <- sapply(time_prefixes, function(x) paste0("RR_",x,"Time"))
+
+#Function to process each row
+get_partial <- function(row){
+#create an empty vector to place the results of the computations
+  partial_total <- c()
+#cicle that runs for each prefix. Cycle (for) interacts with each of the elements
+  for(prefix in time_prefixes){
+    
+    t1 <- process_pair(row[[paste0("RR_", prefix,"_T1")]], row[[paste0("RR_", prefix,"_E1")]])
+    t2 <- process_pair(row[[paste0("RR_", prefix,"_T2")]], row[[paste0("RR_", prefix,"_E2")]])
+    t3 <- process_pair(row[[paste0("RR_", prefix,"_T3")]], row[[paste0("RR_", prefix,"_E3")]])
+    
+    partial_total <- c(partial_total, get_partial_total(t1, t2, t3))
+  }
+#Retunr for each mouse each time point in a vector with seven values  
+  return(partial_total)
+}
+#Specify the consitions to compute T and E
+process_pair <- function(t, e){
+  if(t <= 100){e <- e * 3}
+  if(t > 100 && t <= 200){e <- e * 2}
+  if(t > 200 && t <= 300){e <- e * 1}
+  return(t - e)
+}
+#Process the 3 trials
+get_partial_total <- function(t1, t2, t3){
+  result <- mean(c(t1, t2, t3))
+  return(result)
+}
+
+#Now we are ready to process the data :)
+
+total <- c()
+
+#Index is a variable to run all the rows of my table. After this you get the otcome data
+index <- 1
+while (index <= dim(mice_table)[1]){
+  partial<- get_partial(mice_table[index,])
+  total <- c(total, partial)
+  index <- index + 1
+}
+
+#To organize the date
+RotaRod_Score <- matrix(total, ncol = 7, byrow=T)
+
+
+
+
+
+M_RotaRod_Score <-melt (RotaRod_Score, id = c("Mouse", "Treatment"), measured = c("RR_0D_Score", "RR_7D_Score", "RR_14D_Score", "RR_21D_Score", "RR_28D_Score", "RR_35D_Score", "RR_42D_Score"))
+
+
+summary (RotaRod_Score)
+
+
+
+
+
+
+
+                                    ##### Subgroup data by time point (Score)
+
+
+RotaRod_Score <- read.csv(choose.files(), header = TRUE)
+
+summary (RotaRod_Score)
+
+RotaRod_Score_1 <- subset(RotaRod_Score, select=c(Mouse, RR_0D_Score, RR_7D_Score, RR_14D_Score, RR_28D_Score, RR_35D_Score, RR_42D_Score)) ## For mahalanobis
+
+
+### Identifu Ouliers
+
+RotaRod_mahal <- mahalanobis (RotaRod_Score_1 [ , -1],
+                              colMeans (RotaRod_Score_1 [ , -1], na.rm=T),
+                              cov(RotaRod_Score_1 [ , -1], use="pairwise.complete.obs"))
+
+RotaRod_mahal
+
+cutoff <- qchisq(1-.001, ncol(RotaRod_Score_1[, -1])) ##Cutoff Score
+cutoff
+ncol (RotaRod_Score_1 [, -1]) ##df
+summary (RotaRod_mahal < cutoff) ## see outliers
+No_Outliers <- subset (RotaRod_Score_1, RotaRod_mahal < cutoff) ## To exclude Outliers
+
+
+
+#### Set uo Correlations
+
+correlation <- cor (RotaRod_Score_1 [, -1], use="pairwise.complete.obs")
+symnum (correlation)
+correlation
+
+
+### Set up the rest of assumptions
+
+RandomVariable <- rchisq(nrow (RotaRod_Score_1 [, -1]), 7)
+FakeModel <- lm (RandomVariable~., data=RotaRod_Score_1)
+Standarized <- rstudent(FakeModel)
+Fitted <- scale (FakeModel$fitted.values)
+
+## Normality 
+hist(Standarized )
+
+## Linearity
+qqnorm(Standarized)
+abline(0,1)
+
+##Homogenity
+plot(Fitted, Standarized)
+abline(0,0)
+abline (v=0)
+
+
+M_RotaRod_Score <-melt (RotaRod_Score, id = c("Mouse", "Treatment"), measured = c("RR_0D_Score", "RR_7D_Score", "RR_14D_Score", "RR_21D_Score", "RR_28D_Score", "RR_35D_Score", "RR_42D_Score"))
+colnames (M_RotaRod_Score) = c ("Mouse", "Treatment", "TimePoint", "Time")
+
+ezANOVA(M_RotaRod_Score,
+        wid=Mouse,
+        within = .(TimePoint, Treatment),
+        dv= Time,
+        detailed = TRUE,
+        type=3)
+
+
+
+## Melt the Data
+
+colnames (M_RotaRod_Score) = c ("Mouse", "Treatment", "TimePoint", "Time")
+
+
+ezANOVA(M_RotaRod_Score,
+        wid=Mouse,
+        within = .(Treatment, TimePoint),
+        dv= Time,
+        type=3)
+
+
+
+
+attach(RotaRod_Score)
+Model <- lm (cbind (RR_0D_Score, RR_7D_Score, RR_14D_Score, RR_28D_Score, RR_35D_Score, RR_42D_Score)~1)
+
+Conditions <- subset(RotaRod_Score, select=c(Treatment, TimePoint))
+
+
+
+
+
+
+RotaRod_0D <- subset(RotaRod_Score, select=c(Treatment, RR_0D_Score))
+
+RotaRod_7D <- subset(RotaRod_Score, select=c(Treatment, RR_7D_Score))
+
+RotaRod_14D <- subset(RotaRod_Score, select=c(Treatment, RR_14D_Score))
+
+RotaRod_21D <- subset(RotaRod_Score, select=c(Treatment, RR_21D_Score))
+
+RotaRod_28D <- subset(RotaRod_Score, select=c(Treatment, RR_28D_Score))
+
+RotaRod_35D <- subset(RotaRod_Score, select=c(Treatment, RR_35D_Score))
+
+RotaRod_42D <- subset(RotaRod_Score, select=c(Treatment, RR_42D_Score))
+
+
+
+
+
+
+ggplot (aes (y = Vol_Dif, x = TimePoint, fill=Treatment), 
+        data = Atrophy_VolDif) + 
+  geom_boxplot(outlier.shape=1, outlier.colour="red") +
+  
+  theme_classic()  +
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=10)) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=10)) +
+  labs(title = "Whole Brain Atrophy", x = "Time Point", y = "Ratio (Ipsi/Contra)")
+
+
+
+
+
+
+##### DETECTING OUTLIERS
+
+#### PLOT OUTLIERS
+
+library(ggplot2)
+library(ggthemes)
+library(reshape)
+
+
+RotaRod_0D_Box <- ggplot(RotaRod_0D, aes(x = Treatment, y = RR_0D_Score, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=10)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=10)) +
+  labs(title = "Base Line", x = "Treatment", y = "RotaRod Score", colour = "Treatment") +
+  
+  geom_boxplot(width=0.3,width=0.3, varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) + 
+  geom_point () + 
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+
+RotaRod_7D_Box <- ggplot(RotaRod_7D, aes(x = Treatment, y = RR_7D_Score, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "7 Days", x = "Treatment", y = "RotaRod Score", colour = "Treatment")+
+  
+  geom_boxplot(width=0.3,varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) + 
+  geom_point () + 
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+
+RotaRod_14D_Box <- ggplot(RotaRod_14D, aes(x = Treatment, y = RR_14D_Score, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "14 Days", x = "Treatment", y = "RotaRod Score", colour = "Treatment") +
+  
+  geom_boxplot(width=0.3, varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) +  
+  geom_point () +  
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+RotaRod_21D_Box <- ggplot(RotaRod_21D, aes(x = Treatment, y = RR_21D_Score, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "21 Days", x = "Treatment", y = "RotaRod Score", colour = "Treatment") + 
+  
+  geom_boxplot(width=0.3, varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) +  
+  geom_point () + 
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+RotaRod_28D_Box <- ggplot(RotaRod_28D, aes(x = Treatment, y = RR_28D_Score, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "28 Days", x = "Treatment", y = "RotaRod Score", colour = "Treatment") +
+  
+  geom_boxplot(width=0.3, varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) +  
+  geom_point () +  
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+RotaRod_35D_Box <- ggplot(RotaRod_35D, aes(x = Treatment, y = RR_35D_Score, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "35 Days", x = "Treatment", y = "RotaRod Score", colour = "Treatment") +
+  
+  geom_boxplot(width=0.3, varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) +  
+  geom_point () +  
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+RotaRod_42D_Box <- ggplot(RotaRod_42D, aes(x = Treatment, y = RR_42D_Score, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "42 Days", x = "Treatment", y = "RotaRod Score", colour = "Treatment") +
+  
+  geom_boxplot(width=0.3, varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) +  
+  geom_point () + 
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+
+
+#### TEST FOR HOMOGENEITY OF VARIANCE
+
+
+library (car)
+
+leveneTest(RotaRod_0D$RR_0D_Score, RotaRod_0D$Treatment) 
+leveneTest(RotaRod_7D$RR_7D_Score, RotaRod_7D$Treatment) 
+leveneTest(RotaRod_14D$RR_14D_Score, RotaRod_14D$Treatment)
+leveneTest(RotaRod_21D$RR_21D_Score, RotaRod_21D$Treatment)
+leveneTest(RotaRod_28D$RR_28D_Score, RotaRod_28D$Treatment)
+leveneTest(RotaRod_35D$RR_35D_Score, RotaRod_35D$Treatment)
+leveneTest(RotaRod_42D$RR_42D_Score, RotaRod_42D$Treatment)
+
+
+
+##### TIME COURSE GRAPH
+
+
+library(reshape)
+
+M_RotaRod_Score <-melt (RotaRod_Score, id = c("Mouse", "Treatment"), measured = c("RR_0D_Score", "RR_7D_Score", "RR_14D_Score", "RR_21D_Score", "RR_28D_Score", "RR_35D_Score", "RR_42D_Score"))
+
+RotaRodTest_Box <- ggplot (M_RotaRod_Score, aes (variable, value, colour = Treatment)) +
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "RotaRod Test", x = "Time Point", y = "RotaRod Score", colour = "Treatment") +
+  scale_x_discrete(breaks=c("RR_0D_Score", "RR_7D_Score", "RR_14D_Score", "RR_21D_Score", "RR_28D_Score", "RR_35D_Score", "RR_42D_Score"),
+                   labels=c("Base Line","7D","14D","21D", "28D", "35D", "42D")) +
+  
+  stat_summary(fun.y = mean, geom = "point") + 
+  stat_summary(fun.y = mean, geom = "line", size=1, aes(group = Treatment)) + 
+  stat_summary(fun.data = mean_cl_boot, geom = "errorbar", width = 0.5)  
+
+
+
+##### TIME COURSE GRAPH without outliers
+
+
+RotaRod_Score_noOutliers <- read.csv(choose.files(), header = TRUE, sep = ",", dec = ".")
+
+
+M_RotaRod_Score_noOutliers <-melt (RotaRod_Score_noOutliers, id = c("Mouse", "Treatment"), measured = c("RR_0D_Score", "RR_7D_Score", "RR_14D_Score", "RR_21D_Score", "RR_28D_Score", "RR_35D_Score", "RR_42D_Score"))
+
+RotaRodTest_Box_noOutliers <- ggplot (M_RotaRod_Score_noOutliers, aes (variable, value, colour = Treatment)) +
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "RotaRod Test", x = "Time Point", y = "RotaRod Score", colour = "Treatment") +
+  scale_x_discrete(breaks=c("RR_0D_Score", "RR_7D_Score", "RR_14D_Score", "RR_21D_Score", "RR_28D_Score", "RR_35D_Score", "RR_42D_Score"),
+                   labels=c("Base Line","7D","14D","21D", "28D", "35D", "42D")) +
+  
+  stat_summary(fun.y = mean, geom = "point") + 
+  stat_summary(fun.y = mean, geom = "line", size=1, aes(group = Treatment)) + 
+  stat_summary(fun.data = mean_cl_boot, geom = "errorbar", width = 0.5)  
+
+
+
+
+
+                                  ##### Subgroup data by time point (Time)
+
+
+RotaRod_Raw <- read.csv(choose.files(), header = TRUE)
+
+
+RotaRod_0D <- subset(RotaRod_Raw, select=c(Treatment, RR_0D_Time))
+
+RotaRod_7D <- subset(RotaRod_Raw, select=c(Treatment, RR_7D_Time))
+
+RotaRod_14D <- subset(RotaRod_Raw, select=c(Treatment, RR_14D_Time))
+
+RotaRod_21D <- subset(RotaRod_Raw, select=c(Treatment, RR_21D_Time))
+
+RotaRod_28D <- subset(RotaRod_Raw, select=c(Treatment, RR_28D_Time))
+
+RotaRod_35D <- subset(RotaRod_Raw, select=c(Treatment, RR_35D_Time))
+
+RotaRod_42D <- subset(RotaRod_Raw, select=c(Treatment, RR_42D_Time))
+
+
+##### DETECTING OUTLIERS
+
+#### PLOT OUTLIERS
+
+library(ggplot2)
+library(ggthemes)
+library(reshape)
+
+
+RotaRod_0D_Box <- ggplot(RotaRod_0D, aes(x = Treatment, y = RR_0D_Time, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=10)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=10)) +
+  labs(title = "Base Line", x = "Treatment", y = "RotaRod Time", colour = "Treatment") +
+  
+  geom_boxplot(width=0.3,width=0.3, varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) + 
+  geom_point () + 
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+
+RotaRod_7D_Box <- ggplot(RotaRod_7D, aes(x = Treatment, y = RR_7D_Time, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "7 Days", x = "Treatment", y = "RotaRod Time", colour = "Treatment")+
+  
+  geom_boxplot(width=0.3,varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) + 
+  geom_point () + 
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+
+RotaRod_14D_Box <- ggplot(RotaRod_14D, aes(x = Treatment, y = RR_14D_Time, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "14 Days", x = "Treatment", y = "RotaRod Time", colour = "Treatment") +
+  
+  geom_boxplot(width=0.3, varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) +  
+  geom_point () +  
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+RotaRod_21D_Box <- ggplot(RotaRod_21D, aes(x = Treatment, y = RR_21D_Time, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "21 Days", x = "Treatment", y = "RotaRod Time", colour = "Treatment") + 
+  
+  geom_boxplot(width=0.3, varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) +  
+  geom_point () + 
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+RotaRod_28D_Box <- ggplot(RotaRod_28D, aes(x = Treatment, y = RR_28D_Time, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "28 Days", x = "Treatment", y = "RotaRod Time", colour = "Treatment") +
+  
+  geom_boxplot(width=0.3, varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) +  
+  geom_point () +  
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+RotaRod_35D_Box <- ggplot(RotaRod_35D, aes(x = Treatment, y = RR_35D_Time, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "35 Days", x = "Treatment", y = "RotaRod Time", colour = "Treatment") +
+  
+  geom_boxplot(width=0.3, varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) +  
+  geom_point () +  
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+RotaRod_42D_Box <- ggplot(RotaRod_42D, aes(x = Treatment, y = RR_42D_Time, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "42 Days", x = "Treatment", y = "RotaRod Time", colour = "Treatment") +
+  
+  geom_boxplot(width=0.3, varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) +  
+  geom_point () + 
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+
+
+#### TEST FOR HOMOGENEITY OF VARIANCE
+
+
+library (car)
+
+leveneTest(RotaRod_0D$RR_0D_Time, RotaRod_0D$Treatment) 
+leveneTest(RotaRod_7D$RR_7D_Time, RotaRod_7D$Treatment) 
+leveneTest(RotaRod_14D$RR_14D_Time, RotaRod_14D$Treatment)
+leveneTest(RotaRod_21D$RR_21D_Time, RotaRod_21D$Treatment)
+leveneTest(RotaRod_28D$RR_28D_Time, RotaRod_28D$Treatment)
+leveneTest(RotaRod_35D$RR_35D_Time, RotaRod_35D$Treatment)
+leveneTest(RotaRod_42D$RR_42D_Time, RotaRod_42D$Treatment)
+
+
+
+##### TIME COURSE GRAPH
+
+
+library(reshape)
+
+RotaRod_Time <- subset(RotaRod_Raw, select=c(Mouse, Treatment, RR_0D_Time, RR_7D_Time, RR_14D_Time, RR_21D_Time, RR_28D_Time, RR_35D_Time, RR_42D_Time))
+
+M_RotaRod_Time <-melt (RotaRod_Time, id = c("Mouse", "Treatment"), measured = c("RR_0D_Time", "RR_7D_Time", "RR_14D_Time", "RR_21D_Time", "RR_28D_Time", "RR_35D_Time", "RR_42D_Time"))
+
+RotaRodTest_Box <- ggplot (M_RotaRod_Time, aes (variable, value, colour = Treatment)) +
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "RotaRod Test", x = "Time Point", y = "RotaRod Time", colour = "Treatment") +
+  scale_x_discrete(breaks=c("RR_0D_Time", "RR_7D_Time", "RR_14D_Time", "RR_21D_Time", "RR_28D_Time", "RR_35D_Time", "RR_42D_Time"),
+                   labels=c("Base Line","7D","14D","21D", "28D", "35D", "42D")) +
+  
+  stat_summary(fun.y = mean, geom = "point") + 
+  stat_summary(fun.y = mean, geom = "line", size=1, aes(group = Treatment)) + 
+  stat_summary(fun.data = mean_cl_boot, geom = "errorbar", width = 0.5)  
+
+
+
+
+
+                                    ##### Subgroup data by time point (Errors)
+
+
+RotaRod_Raw <- read.csv(choose.files(), header = TRUE)
+
+
+RotaRod_0D <- subset(RotaRod_Error, select=c(Treatment, RR_0D_Error))
+
+RotaRod_7D <- subset(RotaRod_Error, select=c(Treatment, RR_7D_Error))
+
+RotaRod_14D <- subset(RotaRod_Error, select=c(Treatment, RR_14D_Error))
+
+RotaRod_21D <- subset(RotaRod_Error, select=c(Treatment, RR_21D_Error))
+
+RotaRod_28D <- subset(RotaRod_Error, select=c(Treatment, RR_28D_Error))
+
+RotaRod_35D <- subset(RotaRod_Error, select=c(Treatment, RR_35D_Error))
+
+RotaRod_42D <- subset(RotaRod_Error, select=c(Treatment, RR_42D_Error))
+
+
+
+
+
+##### DETECTING OUTLIERS
+
+#### PLOT OUTLIERS
+
+library(ggplot2)
+library(ggthemes)
+library(reshape)
+
+
+RotaRod_0D_Box <- ggplot(RotaRod_0D, aes(x = Treatment, y = RR_0D_Error, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=10)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=10)) +
+  labs(title = "Base Line", x = "Treatment", y = "RotaRod Error", colour = "Treatment") +
+  
+  geom_boxplot(width=0.3,width=0.3, varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) + 
+  geom_point () + 
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+
+RotaRod_7D_Box <- ggplot(RotaRod_7D, aes(x = Treatment, y = RR_7D_Error, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "7 Days", x = "Treatment", y = "RotaRod Error", colour = "Treatment")+
+  
+  geom_boxplot(width=0.3,varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) + 
+  geom_point () + 
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+
+RotaRod_14D_Box <- ggplot(RotaRod_14D, aes(x = Treatment, y = RR_14D_Error, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "14 Days", x = "Treatment", y = "RotaRod Error", colour = "Treatment") +
+  
+  geom_boxplot(width=0.3, varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) +  
+  geom_point () +  
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+RotaRod_21D_Box <- ggplot(RotaRod_21D, aes(x = Treatment, y = RR_21D_Error, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "21 Days", x = "Treatment", y = "RotaRod Error", colour = "Treatment") + 
+  
+  geom_boxplot(width=0.3, varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) +  
+  geom_point () + 
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+RotaRod_28D_Box <- ggplot(RotaRod_28D, aes(x = Treatment, y = RR_28D_Error, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "28 Days", x = "Treatment", y = "RotaRod Error", colour = "Treatment") +
+  
+  geom_boxplot(width=0.3, varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) +  
+  geom_point () +  
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+RotaRod_35D_Box <- ggplot(RotaRod_35D, aes(x = Treatment, y = RR_35D_Error, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "35 Days", x = "Treatment", y = "RotaRod Error", colour = "Treatment") +
+  
+  geom_boxplot(width=0.3, varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) +  
+  geom_point () +  
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+RotaRod_42D_Box <- ggplot(RotaRod_42D, aes(x = Treatment, y = RR_42D_Error, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "42 Days", x = "Treatment", y = "RotaRod Error", colour = "Treatment") +
+  
+  geom_boxplot(width=0.3, varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) +  
+  geom_point () + 
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+
+
+#### TEST FOR HOMOGENEITY OF VARIANCE
+
+
+library (car)
+
+leveneTest(RotaRod_0D$RR_0D_Error, RotaRod_0D$Treatment) 
+leveneTest(RotaRod_7D$RR_7D_Error, RotaRod_7D$Treatment) 
+leveneTest(RotaRod_14D$RR_14D_Error, RotaRod_14D$Treatment)
+leveneTest(RotaRod_21D$RR_21D_Error, RotaRod_21D$Treatment)
+leveneTest(RotaRod_28D$RR_28D_Error, RotaRod_28D$Treatment)
+leveneTest(RotaRod_35D$RR_35D_Error, RotaRod_35D$Treatment)
+leveneTest(RotaRod_42D$RR_42D_Error, RotaRod_42D$Treatment)
+
+
+
+##### TIME COURSE GRAPH
+
+
+library(reshape)
+
+RotaRod_Error <- subset(RotaRod_Raw, select=c(Mouse, Treatment, RR_0D_Error, RR_7D_Error, RR_14D_Error, RR_21D_Error, RR_28D_Error, RR_35D_Error, RR_42D_Error))
+
+M_RotaRod_Error <-melt (RotaRod_Error, id = c("Mouse", "Treatment"), measured = c("RR_0D_Error", "RR_7D_Error", "RR_14D_Error", "RR_21D_Error", "RR_28D_Error", "RR_35D_Error", "RR_42D_Error"))
+
+RotaRodTest_Box <- ggplot (M_RotaRod_Error, aes (variable, value, colour = Treatment)) +
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "RotaRod Test", x = "Time Point", y = "RotaRod Error", colour = "Treatment") +
+  scale_x_discrete(breaks=c("RR_0D_Error", "RR_7D_Error", "RR_14D_Error", "RR_21D_Error", "RR_28D_Error", "RR_35D_Error", "RR_42D_Error"),
+                   labels=c("Base Line","7D","14D","21D", "28D", "35D", "42D")) +
+  
+  stat_summary(fun.y = mean, geom = "point") + 
+  stat_summary(fun.y = mean, geom = "line", size=1, aes(group = Treatment)) + 
+  stat_summary(fun.data = mean_cl_boot, geom = "errorbar", width = 0.5)  
+
+
+
