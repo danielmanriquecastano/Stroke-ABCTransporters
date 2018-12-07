@@ -1,0 +1,513 @@
+#### CALL FILE
+
+TightRope <- read.csv(choose.files (), header = TRUE)
+
+
+### vARIABLES WEIGHT AND FUNCTIONS
+
+contact_weight <- 0.3
+time_weight <- 0.3
+paw_weight <- 0.3
+success_weight <- 0.1
+
+compute_contact <- function(contact){
+  if(contact == 0){
+    return(60)
+  }else{
+    return(contact)
+  }
+}
+  
+compute_time <- function(score){
+  return(score)
+}
+
+compute_paw <- function(paw){
+  if(paw == 0){
+    return(0)
+  }
+  else if(paw == 1){
+    return(30)
+  }
+  else if(paw == 2){
+    return(60)
+  }
+}
+
+compute_success <- function(success, time){
+  if(success == 0 || time == 60){
+    return(60)
+  }
+  else{
+    return(0)
+  }
+}
+
+### SCORE FUNCTION
+
+compute_score <- function(contact, time, paw, success){
+  contact_score <- compute_contact(contact)*contact_weight
+  time_score <- compute_time(time)*time_weight
+  paw_score <- compute_paw(paw)*paw_weight
+  success_score <- compute_success(success, time)*success_weight
+  
+  return(contact_score + time_score + paw_score + success_score)
+}
+
+# Subset columms
+
+indexes <- grep("^TR", colnames(TightRope))
+
+#Save columns name as vector
+
+columns <- colnames(TightRope[c(1,indexes)])
+
+#Get table with mice and rota columns
+
+TightRope_Data <- TightRope[c(1,indexes)]
+
+#Convert from list to dataframe and set column names
+TightRope_Data <- data.frame(matrix(unlist(TightRope_Data), nrow=74, byrow=F), stringsAsFactors = FALSE)
+names(TightRope_Data) <- columns
+#To select the colummns needed. The data subset is ready to work with
+TightRope_Data <- TightRope_Data[1:74,]
+
+#Time prefixes to create partial and total labels
+time_prefixes <- c("0D", "7D", "14D", "21D", "28D", "35D", "42D")
+
+#to add the words ROTA y TOTAL to time prefixes and get the titles for the outcome
+
+total_labels <- sapply(time_prefixes, function(x) paste0("TR_",x,"_Score"))
+
+
+#Process each row
+get_partials <- function(row){
+  
+  print(row)
+  
+  partial_total <- c()
+  
+  for(prefix in time_prefixes){
+    
+      contact <- row[[paste0("TR_", prefix,"_C1")]]
+      print(contact)
+
+      s1 <- compute_score(row[[paste0("TR_", prefix,"_C1")]], row[[paste0("TR_", prefix,"_T1")]], row[[paste0("TR_", prefix,"_P1")]], row[[paste0("TR_", prefix,"_S1")]])
+      s2 <- compute_score(row[[paste0("TR_", prefix,"_C2")]], row[[paste0("TR_", prefix,"_T2")]], row[[paste0("TR_", prefix,"_P2")]], row[[paste0("TR_", prefix,"_S2")]])
+      s3 <- compute_score(row[[paste0("TR_", prefix,"_C3")]], row[[paste0("TR_", prefix,"_T3")]], row[[paste0("TR_", prefix,"_P3")]], row[[paste0("TR_", prefix,"_S3")]])
+      
+      partial_total <- c(partial_total, s1 + s2 + s3)
+      #partial_total <-c(partial_total, c(s1, s2, s3))
+  
+    }
+  
+  return(partial_total)
+  
+}
+
+
+#Now we are ready to process the data :)
+
+total <- c()
+
+#Index is a variable to run all the rows of my table. After this you get the otcome data
+index <- 1
+while (index <= dim(TightRope_Data)[1]){
+  row <- TightRope_Data[index,]
+  partial<- get_partials(row)
+  total <- c(total, partial)
+  index <- index + 1
+}
+
+#To organize the data
+TightRope_Score <- matrix(total, ncol = 7, byrow=T)
+colnames(total) <- total_labels
+
+
+
+                                ##### Subgroup data by time point (Score)
+
+
+TightRope_Score <- read.csv(choose.files(), header = TRUE)
+
+
+TightRope_0D <- subset(TightRope_Score, select=c(Treatment, TR_0D_Score))
+
+TightRope_7D <- subset(TightRope_Score, select=c(Treatment, TR_7D_Score))
+
+TightRope_14D <- subset(TightRope_Score, select=c(Treatment, TR_14D_Score))
+
+TightRope_21D <- subset(TightRope_Score, select=c(Treatment, TR_21D_Score))
+
+TightRope_28D <- subset(TightRope_Score, select=c(Treatment, TR_28D_Score))
+
+TightRope_35D <- subset(TightRope_Score, select=c(Treatment, TR_35D_Score))
+
+TightRope_42D <- subset(TightRope_Score, select=c(Treatment, TR_42D_Score))
+
+
+##### DETECTING OUTLIERS
+
+#### PLOT OUTLIERS
+
+library(ggplot2)
+library(ggthemes)
+library(reshape)
+
+
+TightRope_0D_Box <- ggplot(TightRope_0D, aes(x = Treatment, y = TR_0D_Score, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=10)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=10)) +
+  labs(title = "Base Line", x = "Treatment", y = "TightRope Score", colour = "Treatment") +
+  
+  geom_boxplot(width=0.3,width=0.3, varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) + 
+  geom_point () + 
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+
+TightRope_7D_Box <- ggplot(TightRope_7D, aes(x = Treatment, y = TR_7D_Score, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "7 Days", x = "Treatment", y = "TightRope Score", colour = "Treatment")+
+  
+  geom_boxplot(width=0.3,varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) + 
+  geom_point () + 
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+
+TightRope_14D_Box <- ggplot(TightRope_14D, aes(x = Treatment, y = TR_14D_Score, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "14 Days", x = "Treatment", y = "TightRope Score", colour = "Treatment") +
+  
+  geom_boxplot(width=0.3, varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) +  
+  geom_point () +  
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+TightRope_21D_Box <- ggplot(TightRope_21D, aes(x = Treatment, y = TR_21D_Score, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "21 Days", x = "Treatment", y = "TightRope Score", colour = "Treatment") + 
+  
+  geom_boxplot(width=0.3, varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) +  
+  geom_point () + 
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+TightRope_28D_Box <- ggplot(TightRope_28D, aes(x = Treatment, y = TR_28D_Score, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "28 Days", x = "Treatment", y = "TightRope Score", colour = "Treatment") +
+  
+  geom_boxplot(width=0.3, varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) +  
+  geom_point () +  
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+TightRope_35D_Box <- ggplot(TightRope_35D, aes(x = Treatment, y = TR_35D_Score, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "35 Days", x = "Treatment", y = "TightRope Score", colour = "Treatment") +
+  
+  geom_boxplot(width=0.3, varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) +  
+  geom_point () +  
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+TightRope_42D_Box <- ggplot(TightRope_42D, aes(x = Treatment, y = TR_42D_Score, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "42 Days", x = "Treatment", y = "TightRope Score", colour = "Treatment") +
+  
+  geom_boxplot(width=0.3, varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) +  
+  geom_point () + 
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+
+
+#### TEST FOR HOMOGENEITY OF VARIANCE
+
+
+library (car)
+
+leveneTest(TightRope_0D$TR_0D_Score, TightRope_0D$Treatment) 
+leveneTest(TightRope_7D$TR_7D_Score, TightRope_7D$Treatment) 
+leveneTest(TightRope_14D$TR_14D_Score, TightRope_14D$Treatment)
+leveneTest(TightRope_21D$TR_21D_Score, TightRope_21D$Treatment)
+leveneTest(TightRope_28D$TR_28D_Score, TightRope_28D$Treatment)
+leveneTest(TightRope_35D$TR_35D_Score, TightRope_35D$Treatment)
+leveneTest(TightRope_42D$TR_42D_Score, TightRope_42D$Treatment)
+
+
+
+##### TIME COURSE GRAPH
+
+
+library(reshape)
+
+M_TightRope_Score <-melt (TightRope_Score, id = c("Mouse", "Treatment"), measured = c("TR_0D_Score", "TR_7D_Score", "TR_14D_Score", "TR_21D_Score", "TR_28D_Score", "TR_35D_Score", "TR_42D_Score"))
+
+TightRopeTest_Box <- ggplot (M_TightRope_Score, aes (variable, value, colour = Treatment)) +
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "TightRope Test", x = "Time Point", y = "TightRope Score", colour = "Treatment") +
+  scale_x_discrete(breaks=c("TR_0D_Score", "TR_7D_Score", "TR_14D_Score", "TR_21D_Score", "TR_28D_Score", "TR_35D_Score", "TR_42D_Score"),
+                   labels=c("Base Line","7D","14D","21D", "28D", "35D", "42D")) +
+  
+  stat_summary(fun.y = mean, geom = "point") + 
+  stat_summary(fun.y = mean, geom = "line", size=1, aes(group = Treatment)) + 
+  stat_summary(fun.data = mean_cl_boot, geom = "errorbar", width = 0.5)  
+
+
+
+##### TIME COURSE GRAPH without outliers
+
+
+TightRope_Score_noOutliers <- read.csv(choose.files(), header = TRUE, sep = ",", dec = ".")
+
+
+M_TightRope_Score_noOutliers <-melt (TightRope_Score_noOutliers, id = c("Mouse", "Treatment"), measured = c("TR_0D_Score", "TR_7D_Score", "TR_14D_Score", "TR_21D_Score", "TR_28D_Score", "TR_35D_Score", "TR_42D_Score"))
+
+TightRopeTest_Box_noOutliers <- ggplot (M_TightRope_Score_noOutliers, aes (variable, value, colour = Treatment)) +
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "TightRope Test", x = "Time Point", y = "TightRope Score", colour = "Treatment") +
+  scale_x_discrete(breaks=c("TR_0D_Score", "TR_7D_Score", "TR_14D_Score", "TR_21D_Score", "TR_28D_Score", "TR_35D_Score", "TR_42D_Score"),
+                   labels=c("Base Line","7D","14D","21D", "28D", "35D", "42D")) +
+  
+  stat_summary(fun.y = mean, geom = "point") + 
+  stat_summary(fun.y = mean, geom = "line", size=1, aes(group = Treatment)) + 
+  stat_summary(fun.data = mean_cl_boot, geom = "errorbar", width = 0.5)  
+
+
+
+                              ##### Subgroup data by time point (Time)
+
+
+TightRope_Raw <- read.csv(choose.files(), header = TRUE)
+
+
+TightRope_0D <- subset(TightRope_Raw, select=c(Treatment, TR_0D_Time))
+
+TightRope_7D <- subset(TightRope_Raw, select=c(Treatment, TR_7D_Time))
+
+TightRope_14D <- subset(TightRope_Raw, select=c(Treatment, TR_14D_Time))
+
+TightRope_21D <- subset(TightRope_Raw, select=c(Treatment, TR_21D_Time))
+
+TightRope_28D <- subset(TightRope_Raw, select=c(Treatment, TR_28D_Time))
+
+TightRope_35D <- subset(TightRope_Raw, select=c(Treatment, TR_35D_Time))
+
+TightRope_42D <- subset(TightRope_Raw, select=c(Treatment, TR_42D_Time))
+
+
+##### DETECTING OUTLIERS
+
+#### PLOT OUTLIERS
+
+library(ggplot2)
+library(ggthemes)
+library(reshape)
+
+
+TightRope_0D_Box <- ggplot(TightRope_0D, aes(x = Treatment, y = TR_0D_Time, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=10)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=10)) +
+  labs(title = "Base Line", x = "Treatment", y = "TightRope Time", colour = "Treatment") +
+  
+  geom_boxplot(width=0.3,width=0.3, varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) + 
+  geom_point () + 
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+
+TightRope_7D_Box <- ggplot(TightRope_7D, aes(x = Treatment, y = TR_7D_Time, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "7 Days", x = "Treatment", y = "TightRope Time", colour = "Treatment")+
+  
+  geom_boxplot(width=0.3,varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) + 
+  geom_point () + 
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+
+TightRope_14D_Box <- ggplot(TightRope_14D, aes(x = Treatment, y = TR_14D_Time, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "14 Days", x = "Treatment", y = "TightRope Time", colour = "Treatment") +
+  
+  geom_boxplot(width=0.3, varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) +  
+  geom_point () +  
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+TightRope_21D_Box <- ggplot(TightRope_21D, aes(x = Treatment, y = TR_21D_Time, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "21 Days", x = "Treatment", y = "TightRope Time", colour = "Treatment") + 
+  
+  geom_boxplot(width=0.3, varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) +  
+  geom_point () + 
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+TightRope_28D_Box <- ggplot(TightRope_28D, aes(x = Treatment, y = TR_28D_Time, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "28 Days", x = "Treatment", y = "TightRope Time", colour = "Treatment") +
+  
+  geom_boxplot(width=0.3, varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) +  
+  geom_point () +  
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+TightRope_35D_Box <- ggplot(TightRope_35D, aes(x = Treatment, y = TR_35D_Time, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "35 Days", x = "Treatment", y = "TightRope Time", colour = "Treatment") +
+  
+  geom_boxplot(width=0.3, varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) +  
+  geom_point () +  
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+TightRope_42D_Box <- ggplot(TightRope_42D, aes(x = Treatment, y = TR_42D_Time, colour = Treatment)) + 
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "42 Days", x = "Treatment", y = "TightRope Time", colour = "Treatment") +
+  
+  geom_boxplot(width=0.3, varwidth = TRUE, outlier.colour = "black", outlier.size=3, outlier.shape=8) +  
+  geom_point () + 
+  
+  stat_summary(fun.y="mean", geom="point", shape=23, size=3, fill="black")
+
+
+
+#### TEST FOR HOMOGENEITY OF VARIANCE
+
+
+library (car)
+
+leveneTest(TightRope_0D$TR_0D_Time, TightRope_0D$Treatment) 
+leveneTest(TightRope_7D$TR_7D_Time, TightRope_7D$Treatment) 
+leveneTest(TightRope_14D$TR_14D_Time, TightRope_14D$Treatment)
+leveneTest(TightRope_21D$TR_21D_Time, TightRope_21D$Treatment)
+leveneTest(TightRope_28D$TR_28D_Time, TightRope_28D$Treatment)
+leveneTest(TightRope_35D$TR_35D_Time, TightRope_35D$Treatment)
+leveneTest(TightRope_42D$TR_42D_Time, TightRope_42D$Treatment)
+
+
+
+##### TIME COURSE GRAPH
+
+
+library(reshape)
+
+TightRope_Time <- subset(TightRope_Raw, select=c(Mouse, Treatment, TR_0D_Time, TR_7D_Time, TR_14D_Time, TR_21D_Time, TR_28D_Time, TR_35D_Time, TR_42D_Time))
+
+M_TightRope_Time <-melt (TightRope_Time, id = c("Mouse", "Treatment"), measured = c("TR_0D_Time", "TR_7D_Time", "TR_14D_Time", "TR_21D_Time", "TR_28D_Time", "TR_35D_Time", "TR_42D_Time"))
+
+TightRopeTest_Box <- ggplot (M_TightRope_Time, aes (variable, value, colour = Treatment)) +
+  theme_bw() + 
+  theme(plot.title = element_text(family = "Times", color="black", face="bold", size=16, hjust=0.5, margin = margin(t = 0, r = 0, b = 20, l = 0)))+
+  theme(axis.title.x = element_text(family = "Times", color="black", face="bold", size=16, margin = margin(t = 20, r = 0, b =0, l = 0))) +
+  theme(axis.title.y = element_text(family = "Times", color="black", face="bold", size=16, angle=90)) +
+  theme(legend.title=element_text(face="bold", family="Times", colour="black", size=12)) +
+  theme(axis.text.x=element_text(family = "Times", color = "black", size=12)) +
+  theme(axis.text.y=element_text(family = "Times", color = "black", size=12)) +
+  labs(title = "TightRope Test", x = "Time Point", y = "TightRope Time", colour = "Treatment") +
+  scale_x_discrete(breaks=c("TR_0D_Time", "TR_7D_Time", "TR_14D_Time", "TR_21D_Time", "TR_28D_Time", "TR_35D_Time", "TR_42D_Time"),
+                   labels=c("Base Line","7D","14D","21D", "28D", "35D", "42D")) +
+  
+  stat_summary(fun.y = mean, geom = "point") + 
+  stat_summary(fun.y = mean, geom = "line", size=1, aes(group = Treatment)) + 
+  stat_summary(fun.data = mean_cl_boot, geom = "errorbar", width = 0.5)  
+
+
+
